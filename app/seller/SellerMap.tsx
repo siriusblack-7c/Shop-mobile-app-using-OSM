@@ -1,9 +1,11 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { dataStore, Review } from '../shared/dataStore';
 import { Product } from './ProductForm';
+import StoreDetails from './StoreDetails';
 import StoreForm from './StoreForm';
 import StoreList from './StoreList';
 
@@ -21,31 +23,66 @@ interface Store {
 
 export default function SellerMap() {
     const [stores, setStores] = useState<Store[]>([]);
+    const [reviews, setReviews] = useState<Review[]>([]);
     const [showStoreForm, setShowStoreForm] = useState(false);
+    const [showStoreDetails, setShowStoreDetails] = useState(false);
     const [selectedCoordinate, setSelectedCoordinate] = useState<{ latitude: number, longitude: number } | null>(null);
+    const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+    const [editingStore, setEditingStore] = useState<Store | null>(null);
     const [viewMode, setViewMode] = useState<'map' | 'stores'>('map');
+
+    // Subscribe to review changes
+    useEffect(() => {
+        const updateReviews = () => {
+            setReviews(dataStore.getReviews());
+        };
+
+        // Initial load
+        updateReviews();
+
+        // Subscribe to changes
+        const unsubscribe = dataStore.subscribe(updateReviews);
+
+        return unsubscribe;
+    }, []);
 
     const handleMapPress = (event: any) => {
         const { latitude, longitude } = event.nativeEvent.coordinate;
         setSelectedCoordinate({ latitude, longitude });
+        setEditingStore(null); // Clear editing store for new store creation
         setShowStoreForm(true);
     };
 
     const handleSaveStore = (storeData: Omit<Store, 'id' | 'products'>) => {
-        const newStore: Store = {
-            ...storeData,
-            id: Date.now().toString(),
-            products: [],
-        };
-
-        setStores([...stores, newStore]);
-        Alert.alert('Success!', 'Store added successfully');
+        if (editingStore) {
+            // Update existing store
+            const updatedStore: Store = {
+                ...editingStore,
+                ...storeData,
+                products: editingStore.products, // Keep existing products
+            };
+            setStores(stores.map(store =>
+                store.id === editingStore.id ? updatedStore : store
+            ));
+            Alert.alert('Success!', 'Store updated successfully');
+            setEditingStore(null);
+        } else {
+            // Create new store
+            const newStore: Store = {
+                ...storeData,
+                id: Date.now().toString(),
+                products: [],
+            };
+            setStores([...stores, newStore]);
+            Alert.alert('Success!', 'Store added successfully');
+        }
     };
 
     const handleUpdateStore = (updatedStore: Store) => {
         setStores(stores.map(store =>
             store.id === updatedStore.id ? updatedStore : store
         ));
+        setSelectedStore(updatedStore); // Update selected store to reflect changes
     };
 
     const getMarkerIcon = (type: 'beef' | 'fish') => {
@@ -53,23 +90,28 @@ export default function SellerMap() {
     };
 
     const handleMarkerPress = (store: Store) => {
-        Alert.alert(
-            store.name,
-            `Seller: ${store.sellerName}\nType: ${store.type === 'beef' ? 'Beef Store 🐄' : 'Fish Store 🐟'}\nPrice: ${store.price}\nProducts: ${store.products.length}\nDescription: ${store.description}`,
-            [
-                { text: 'OK' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: () => deleteStore(store.id)
-                }
-            ]
-        );
+        setSelectedStore(store);
+        setShowStoreDetails(true);
+    };
+
+    const handleEditStoreFromDetails = (store: Store) => {
+        setEditingStore(store);
+        setSelectedCoordinate({ latitude: store.latitude, longitude: store.longitude });
+        setShowStoreDetails(false);
+        setShowStoreForm(true);
     };
 
     const deleteStore = (storeId: string) => {
         setStores(stores.filter(s => s.id !== storeId));
         Alert.alert('Deleted', 'Store removed successfully');
+    };
+
+    const getStoreReviewCount = (storeId: string) => {
+        return dataStore.getStoreReviewCount(storeId);
+    };
+
+    const getStoreAverageRating = (storeId: string) => {
+        return dataStore.getStoreAverageRating(storeId).toFixed(1);
     };
 
     const renderMapView = () => (
@@ -85,26 +127,34 @@ export default function SellerMap() {
             mapType="standard"
             onPress={handleMapPress}
         >
-            {stores.map((store) => (
-                <Marker
-                    key={store.id}
-                    coordinate={{
-                        latitude: store.latitude,
-                        longitude: store.longitude,
-                    }}
-                    title={store.name}
-                    description={`${store.type} store - ${store.products.length} products`}
-                    onPress={() => handleMarkerPress(store)}
-                >
-                    <ThemedText style={styles.markerEmoji}>{getMarkerIcon(store.type)}</ThemedText>
-                </Marker>
-            ))}
+            {stores.map((store) => {
+                const reviewCount = getStoreReviewCount(store.id);
+                const avgRating = getStoreAverageRating(store.id);
+                const description = reviewCount > 0
+                    ? `${store.type} store - ${store.products.length} products - ⭐${avgRating} (${reviewCount} reviews)`
+                    : `${store.type} store - ${store.products.length} products`;
+
+                return (
+                    <Marker
+                        key={store.id}
+                        coordinate={{
+                            latitude: store.latitude,
+                            longitude: store.longitude,
+                        }}
+                        title={store.name}
+                        description={description}
+                        onPress={() => handleMarkerPress(store)}
+                    >
+                        <ThemedText style={styles.markerEmoji}>{getMarkerIcon(store.type)}</ThemedText>
+                    </Marker>
+                );
+            })}
         </MapView>
     );
 
     const getViewModeText = () => {
         switch (viewMode) {
-            case 'map': return 'Tap on map to add your store';
+            case 'map': return 'Tap on map to add store, tap markers to edit';
             case 'stores': return 'Your stores and products';
             default: return '';
         }
@@ -112,6 +162,12 @@ export default function SellerMap() {
 
     const getTotalProducts = () => {
         return stores.reduce((total, store) => total + store.products.length, 0);
+    };
+
+    const getTotalReviews = () => {
+        return reviews.filter(review =>
+            stores.some(store => store.id === review.storeId)
+        ).length;
     };
 
     const renderCurrentView = () => {
@@ -124,6 +180,7 @@ export default function SellerMap() {
                         stores={stores}
                         onDeleteStore={deleteStore}
                         onUpdateStore={handleUpdateStore}
+                        reviews={reviews}
                     />
                 );
             default:
@@ -140,6 +197,7 @@ export default function SellerMap() {
                     <ThemedView style={styles.countsContainer}>
                         <ThemedText style={styles.countText}>Stores: {stores.length}</ThemedText>
                         <ThemedText style={styles.countText}>Products: {getTotalProducts()}</ThemedText>
+                        <ThemedText style={styles.countText}>Reviews: {getTotalReviews()}</ThemedText>
                     </ThemedView>
                     <View style={styles.toggleContainer}>
                         <TouchableOpacity
@@ -164,12 +222,35 @@ export default function SellerMap() {
 
             {renderCurrentView()}
 
+            {/* Store Form for creating/editing stores */}
             <StoreForm
                 visible={showStoreForm}
-                onClose={() => setShowStoreForm(false)}
+                onClose={() => {
+                    setShowStoreForm(false);
+                    setEditingStore(null);
+                }}
                 onSave={handleSaveStore}
                 latitude={selectedCoordinate?.latitude || 0}
                 longitude={selectedCoordinate?.longitude || 0}
+                editStore={editingStore}
+            />
+
+            {/* Store Details for managing products and editing store */}
+            <StoreDetails
+                visible={showStoreDetails}
+                store={selectedStore}
+                onClose={() => {
+                    setShowStoreDetails(false);
+                    setSelectedStore(null);
+                }}
+                onUpdateStore={handleUpdateStore}
+                onDeleteStore={(storeId) => {
+                    deleteStore(storeId);
+                    setShowStoreDetails(false);
+                    setSelectedStore(null);
+                }}
+                onEditStore={handleEditStoreFromDetails}
+                reviews={reviews}
             />
         </ThemedView>
     );

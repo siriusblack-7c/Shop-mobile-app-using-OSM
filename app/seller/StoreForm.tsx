@@ -1,7 +1,8 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { Product } from './ProductForm';
 
 interface Store {
     id: string;
@@ -12,6 +13,7 @@ interface Store {
     price: string;
     description: string;
     sellerName: string;
+    products: Product[];
 }
 
 interface StoreFormProps {
@@ -20,14 +22,33 @@ interface StoreFormProps {
     onSave: (store: Omit<Store, 'id' | 'products'>) => void;
     latitude: number;
     longitude: number;
+    editStore?: Store | null; // Add support for editing existing stores
 }
 
-export default function StoreForm({ visible, onClose, onSave, latitude, longitude }: StoreFormProps) {
+export default function StoreForm({ visible, onClose, onSave, latitude, longitude, editStore }: StoreFormProps) {
     const [storeName, setStoreName] = useState('');
     const [storeType, setStoreType] = useState<'beef' | 'fish'>('beef');
     const [price, setPrice] = useState('');
     const [description, setDescription] = useState('');
     const [sellerName, setSellerName] = useState('');
+
+    // Pre-fill form when editing a store
+    useEffect(() => {
+        if (editStore) {
+            setStoreName(editStore.name);
+            setStoreType(editStore.type);
+            setPrice(editStore.price);
+            setDescription(editStore.description);
+            setSellerName(editStore.sellerName);
+        } else {
+            // Reset form for new store
+            setStoreName('');
+            setStoreType('beef');
+            setPrice('');
+            setDescription('');
+            setSellerName('');
+        }
+    }, [editStore, visible]);
 
     const handleSave = () => {
         if (!storeName || !price || !description || !sellerName) {
@@ -36,8 +57,8 @@ export default function StoreForm({ visible, onClose, onSave, latitude, longitud
         }
 
         const store: Omit<Store, 'id' | 'products'> = {
-            latitude,
-            longitude,
+            latitude: editStore ? editStore.latitude : latitude, // Keep original location when editing
+            longitude: editStore ? editStore.longitude : longitude,
             name: storeName,
             type: storeType,
             price,
@@ -49,6 +70,7 @@ export default function StoreForm({ visible, onClose, onSave, latitude, longitud
 
         // Reset form
         setStoreName('');
+        setStoreType('beef');
         setPrice('');
         setDescription('');
         setSellerName('');
@@ -58,6 +80,7 @@ export default function StoreForm({ visible, onClose, onSave, latitude, longitud
     const handleCancel = () => {
         // Reset form
         setStoreName('');
+        setStoreType('beef');
         setPrice('');
         setDescription('');
         setSellerName('');
@@ -69,7 +92,9 @@ export default function StoreForm({ visible, onClose, onSave, latitude, longitud
             <ThemedView style={styles.overlay}>
                 <ThemedView style={styles.modal}>
                     <ScrollView showsVerticalScrollIndicator={false}>
-                        <ThemedText type="title" style={styles.title}>Add Store Details</ThemedText>
+                        <ThemedText type="title" style={styles.title}>
+                            {editStore ? 'Edit Store Details' : 'Add Store Details'}
+                        </ThemedText>
 
                         {/* Store Name */}
                         <ThemedText style={styles.label}>Store Name</ThemedText>
@@ -137,6 +162,19 @@ export default function StoreForm({ visible, onClose, onSave, latitude, longitud
                             numberOfLines={3}
                         />
 
+                        {/* Location Info (when editing) */}
+                        {editStore && (
+                            <ThemedView style={styles.locationInfo}>
+                                <ThemedText style={styles.locationLabel}>Store Location</ThemedText>
+                                <ThemedText style={styles.locationText}>
+                                    📍 {editStore.latitude.toFixed(4)}, {editStore.longitude.toFixed(4)}
+                                </ThemedText>
+                                <ThemedText style={styles.locationNote}>
+                                    Location cannot be changed when editing
+                                </ThemedText>
+                            </ThemedView>
+                        )}
+
                         {/* Buttons */}
                         <ThemedView style={styles.buttonContainer}>
                             <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
@@ -144,7 +182,9 @@ export default function StoreForm({ visible, onClose, onSave, latitude, longitud
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                                <ThemedText style={styles.saveButtonText}>Save Store</ThemedText>
+                                <ThemedText style={styles.saveButtonText}>
+                                    {editStore ? 'Update Store' : 'Save Store'}
+                                </ThemedText>
                             </TouchableOpacity>
                         </ThemedView>
                     </ScrollView>
@@ -221,6 +261,31 @@ const styles = StyleSheet.create({
     selectedTypeText: {
         color: '#007AFF',
         fontWeight: '600',
+    },
+    locationInfo: {
+        backgroundColor: '#f0f8ff',
+        padding: 16,
+        borderRadius: 8,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: '#007AFF',
+    },
+    locationLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#007AFF',
+        marginBottom: 4,
+    },
+    locationText: {
+        fontSize: 14,
+        color: '#333',
+        fontFamily: 'monospace',
+        marginBottom: 4,
+    },
+    locationNote: {
+        fontSize: 12,
+        color: '#666',
+        fontStyle: 'italic',
     },
     buttonContainer: {
         flexDirection: 'row',

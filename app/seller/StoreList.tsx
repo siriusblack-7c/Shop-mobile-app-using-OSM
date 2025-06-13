@@ -5,6 +5,15 @@ import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-nat
 import { Product } from './ProductForm';
 import StoreDetails from './StoreDetails';
 
+interface Review {
+    id: string;
+    storeId: string;
+    buyerName: string;
+    rating: number;
+    comment: string;
+    date: string;
+}
+
 interface Store {
     id: string;
     latitude: number;
@@ -21,9 +30,10 @@ interface StoreListProps {
     stores: Store[];
     onDeleteStore: (storeId: string) => void;
     onUpdateStore: (updatedStore: Store) => void;
+    reviews?: Review[];
 }
 
-export default function StoreList({ stores, onDeleteStore, onUpdateStore }: StoreListProps) {
+export default function StoreList({ stores, onDeleteStore, onUpdateStore, reviews = [] }: StoreListProps) {
     const [selectedStore, setSelectedStore] = useState<Store | null>(null);
     const [showStoreDetails, setShowStoreDetails] = useState(false);
 
@@ -47,6 +57,23 @@ export default function StoreList({ stores, onDeleteStore, onUpdateStore }: Stor
         setSelectedStore(null);
     };
 
+    const handleEditStore = (store: Store) => {
+        // This function would typically trigger editing mode
+        // For now, we'll just show an alert since editing is handled differently in the parent
+        Alert.alert('Edit Store', 'Store editing is available from the map view');
+    };
+
+    const getStoreReviewCount = (storeId: string) => {
+        return reviews.filter(review => review.storeId === storeId).length;
+    };
+
+    const getStoreAverageRating = (storeId: string) => {
+        const storeReviews = reviews.filter(review => review.storeId === storeId);
+        if (storeReviews.length === 0) return 0;
+        const sum = storeReviews.reduce((acc, review) => acc + review.rating, 0);
+        return (sum / storeReviews.length).toFixed(1);
+    };
+
     return (
         <ThemedView style={styles.container}>
             <ScrollView style={styles.listContainer}>
@@ -56,58 +83,68 @@ export default function StoreList({ stores, onDeleteStore, onUpdateStore }: Stor
                         <ThemedText style={styles.emptySubtext}>Switch to map view and tap to add your first store</ThemedText>
                     </ThemedView>
                 ) : (
-                    stores.map((store) => (
-                        <TouchableOpacity
-                            key={store.id}
-                            style={styles.storeItem}
-                            onPress={() => handleStorePress(store)}
-                        >
-                            <View style={styles.storeItemHeader}>
-                                <ThemedText style={styles.storeEmoji}>{getMarkerIcon(store.type)}</ThemedText>
-                                <View style={styles.storeInfo}>
-                                    <ThemedText style={styles.storeName}>{store.name}</ThemedText>
-                                    <ThemedText style={styles.storeType}>
-                                        {store.type === 'beef' ? 'Beef Store' : 'Fish Store'}
-                                    </ThemedText>
-                                </View>
-                                <View style={styles.storeStats}>
-                                    <ThemedText style={styles.storePrice}>{store.price}</ThemedText>
-                                    <ThemedText style={styles.productCount}>
-                                        📦 {store.products.length} products
-                                    </ThemedText>
-                                </View>
-                            </View>
-                            <ThemedText style={styles.storeDescription}>{store.description}</ThemedText>
-                            <ThemedText style={styles.storeLocation}>
-                                📍 {store.latitude.toFixed(4)}, {store.longitude.toFixed(4)}
-                            </ThemedText>
+                    stores.map((store) => {
+                        const reviewCount = getStoreReviewCount(store.id);
+                        const avgRating = getStoreAverageRating(store.id);
 
-                            {/* Quick actions */}
-                            <View style={styles.quickActions}>
-                                <ThemedText style={styles.tapHint}>Tap to manage products</ThemedText>
-                                <TouchableOpacity
-                                    style={styles.deleteButton}
-                                    onPress={(e) => {
-                                        e.stopPropagation();
-                                        Alert.alert(
-                                            'Delete Store',
-                                            `Are you sure you want to delete "${store.name}" and all its products?`,
-                                            [
-                                                { text: 'Cancel', style: 'cancel' },
-                                                {
-                                                    text: 'Delete',
-                                                    style: 'destructive',
-                                                    onPress: () => onDeleteStore(store.id)
-                                                }
-                                            ]
-                                        );
-                                    }}
-                                >
-                                    <ThemedText style={styles.deleteButtonText}>🗑️</ThemedText>
-                                </TouchableOpacity>
-                            </View>
-                        </TouchableOpacity>
-                    ))
+                        return (
+                            <TouchableOpacity
+                                key={store.id}
+                                style={styles.storeItem}
+                                onPress={() => handleStorePress(store)}
+                            >
+                                <View style={styles.storeItemHeader}>
+                                    <ThemedText style={styles.storeEmoji}>{getMarkerIcon(store.type)}</ThemedText>
+                                    <View style={styles.storeInfo}>
+                                        <ThemedText style={styles.storeName}>{store.name}</ThemedText>
+                                        <ThemedText style={styles.storeType}>
+                                            {store.type === 'beef' ? 'Beef Store' : 'Fish Store'}
+                                        </ThemedText>
+                                    </View>
+                                    <View style={styles.storeStats}>
+                                        <ThemedText style={styles.storePrice}>{store.price}</ThemedText>
+                                        <ThemedText style={styles.productCount}>
+                                            📦 {store.products.length} products
+                                        </ThemedText>
+                                        {reviewCount > 0 && (
+                                            <ThemedText style={styles.reviewCount}>
+                                                ⭐ {avgRating} ({reviewCount} reviews)
+                                            </ThemedText>
+                                        )}
+                                    </View>
+                                </View>
+                                <ThemedText style={styles.storeDescription}>{store.description}</ThemedText>
+                                <ThemedText style={styles.storeLocation}>
+                                    📍 {store.latitude.toFixed(4)}, {store.longitude.toFixed(4)}
+                                </ThemedText>
+
+                                {/* Quick actions */}
+                                <View style={styles.quickActions}>
+                                    <ThemedText style={styles.tapHint}>Tap to manage products & view reviews</ThemedText>
+                                    <TouchableOpacity
+                                        style={styles.deleteButton}
+                                        onPress={(e) => {
+                                            e.stopPropagation();
+                                            Alert.alert(
+                                                'Delete Store',
+                                                `Are you sure you want to delete "${store.name}" and all its products?`,
+                                                [
+                                                    { text: 'Cancel', style: 'cancel' },
+                                                    {
+                                                        text: 'Delete',
+                                                        style: 'destructive',
+                                                        onPress: () => onDeleteStore(store.id)
+                                                    }
+                                                ]
+                                            );
+                                        }}
+                                    >
+                                        <ThemedText style={styles.deleteButtonText}>🗑️</ThemedText>
+                                    </TouchableOpacity>
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    })
                 )}
             </ScrollView>
 
@@ -120,6 +157,8 @@ export default function StoreList({ stores, onDeleteStore, onUpdateStore }: Stor
                 }}
                 onUpdateStore={handleStoreUpdate}
                 onDeleteStore={handleDeleteStore}
+                onEditStore={handleEditStore}
+                reviews={reviews}
             />
         </ThemedView>
     );
@@ -198,6 +237,12 @@ const styles = StyleSheet.create({
     productCount: {
         fontSize: 12,
         color: '#666',
+        fontWeight: '500',
+        marginBottom: 2,
+    },
+    reviewCount: {
+        fontSize: 12,
+        color: '#FF9500',
         fontWeight: '500',
     },
     storeDescription: {

@@ -1,8 +1,9 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, TouchableOpacity } from 'react-native';
 import MapView, { Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { dataStore, Review } from '../shared/dataStore';
 import StoreDetails from './StoreDetails';
 
 interface Store {
@@ -22,11 +23,27 @@ export default function BuyerMap() {
     const [nearbyStores, setNearbyStores] = useState<Store[]>([]);
     const [selectedStore, setSelectedStore] = useState<Store | null>(null);
     const [showStoreDetails, setShowStoreDetails] = useState(false);
+    const [reviews, setReviews] = useState<Review[]>([]);
+
+    // Subscribe to review changes
+    useEffect(() => {
+        const updateReviews = () => {
+            setReviews(dataStore.getReviews());
+        };
+
+        // Initial load
+        updateReviews();
+
+        // Subscribe to changes
+        const unsubscribe = dataStore.subscribe(updateReviews);
+
+        return unsubscribe;
+    }, []);
 
     // Mock stores data (in real app, this would come from backend)
     const allStores: Store[] = [
         {
-            id: '1',
+            id: 'sample-store-1',
             latitude: 37.78625,
             longitude: -122.4344,
             name: 'Fresh Beef Market',
@@ -36,7 +53,7 @@ export default function BuyerMap() {
             sellerName: 'John Smith',
         },
         {
-            id: '2',
+            id: 'sample-store-2',
             latitude: 37.79025,
             longitude: -122.4304,
             name: 'Ocean Fresh Fish',
@@ -46,7 +63,7 @@ export default function BuyerMap() {
             sellerName: 'Maria Garcia',
         },
         {
-            id: '3',
+            id: 'sample-store-3',
             latitude: 37.78425,
             longitude: -122.4384,
             name: 'Prime Cuts',
@@ -56,7 +73,7 @@ export default function BuyerMap() {
             sellerName: 'David Wilson',
         },
         {
-            id: '4',
+            id: 'sample-store-4',
             latitude: 37.79225,
             longitude: -122.4284,
             name: 'Seafood Paradise',
@@ -109,10 +126,22 @@ export default function BuyerMap() {
         setShowStoreDetails(true);
     };
 
+    const handleAddReview = (reviewData: Omit<Review, 'id' | 'date'>) => {
+        dataStore.addReview(reviewData);
+    };
+
     const clearLocation = () => {
         setBuyerLocation(null);
         setNearbyStores([]);
         Alert.alert('Cleared', 'Location and stores cleared');
+    };
+
+    const getStoreReviewCount = (storeId: string) => {
+        return dataStore.getStoreReviewCount(storeId);
+    };
+
+    const getStoreAverageRating = (storeId: string) => {
+        return dataStore.getStoreAverageRating(storeId).toFixed(1);
     };
 
     return (
@@ -165,26 +194,36 @@ export default function BuyerMap() {
                 )}
 
                 {/* Store markers (only show nearby stores) */}
-                {nearbyStores.map((store) => (
-                    <Marker
-                        key={store.id}
-                        coordinate={{
-                            latitude: store.latitude,
-                            longitude: store.longitude,
-                        }}
-                        title={store.name}
-                        description={`${store.distance}km away - ${store.price}`}
-                        onPress={() => handleStorePress(store)}
-                    >
-                        <ThemedText style={styles.markerEmoji}>{getMarkerIcon(store.type)}</ThemedText>
-                    </Marker>
-                ))}
+                {nearbyStores.map((store) => {
+                    const reviewCount = getStoreReviewCount(store.id);
+                    const avgRating = getStoreAverageRating(store.id);
+                    const description = reviewCount > 0
+                        ? `${store.distance}km away - ${store.price} - ⭐${avgRating} (${reviewCount} reviews)`
+                        : `${store.distance}km away - ${store.price}`;
+
+                    return (
+                        <Marker
+                            key={store.id}
+                            coordinate={{
+                                latitude: store.latitude,
+                                longitude: store.longitude,
+                            }}
+                            title={store.name}
+                            description={description}
+                            onPress={() => handleStorePress(store)}
+                        >
+                            <ThemedText style={styles.markerEmoji}>{getMarkerIcon(store.type)}</ThemedText>
+                        </Marker>
+                    );
+                })}
             </MapView>
 
             <StoreDetails
                 visible={showStoreDetails}
                 store={selectedStore}
                 onClose={() => setShowStoreDetails(false)}
+                reviews={reviews}
+                onAddReview={handleAddReview}
             />
         </ThemedView>
     );
@@ -212,7 +251,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     clearButton: {
-        backgroundColor: '#ff6b6b',
+        backgroundColor: '#FF3B30',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 6,

@@ -4,6 +4,15 @@ import React, { useState } from 'react';
 import { Alert, Image, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import ProductForm, { Product } from './ProductForm';
 
+interface Review {
+    id: string;
+    storeId: string;
+    buyerName: string;
+    rating: number;
+    comment: string;
+    date: string;
+}
+
 interface Store {
     id: string;
     latitude: number;
@@ -22,9 +31,11 @@ interface StoreDetailsProps {
     onClose: () => void;
     onUpdateStore: (updatedStore: Store) => void;
     onDeleteStore: (storeId: string) => void;
+    onEditStore: (store: Store) => void;
+    reviews?: Review[];
 }
 
-export default function StoreDetails({ visible, store, onClose, onUpdateStore, onDeleteStore }: StoreDetailsProps) {
+export default function StoreDetails({ visible, store, onClose, onUpdateStore, onDeleteStore, onEditStore, reviews = [] }: StoreDetailsProps) {
     const [showProductForm, setShowProductForm] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined);
 
@@ -42,6 +53,10 @@ export default function StoreDetails({ visible, store, onClose, onUpdateStore, o
     const handleEditProduct = (product: Product) => {
         setEditingProduct(product);
         setShowProductForm(true);
+    };
+
+    const handleEditStore = () => {
+        onEditStore(store);
     };
 
     const handleSaveProduct = (productData: Omit<Product, 'id'>) => {
@@ -122,6 +137,46 @@ export default function StoreDetails({ visible, store, onClose, onUpdateStore, o
         return store.products.length;
     };
 
+    // Review-related functions
+    const storeReviews = reviews.filter(review => review.storeId === store.id);
+
+    const getAverageRating = () => {
+        if (storeReviews.length === 0) return 0;
+        const sum = storeReviews.reduce((acc, review) => acc + review.rating, 0);
+        return sum / storeReviews.length;
+    };
+
+    const getAverageRatingText = () => {
+        return getAverageRating().toFixed(1);
+    };
+
+    const renderStars = (rating: number) => {
+        return (
+            <View style={styles.starsContainer}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                    <ThemedText
+                        key={star}
+                        style={[
+                            styles.star,
+                            star <= rating ? styles.starFilled : styles.starEmpty
+                        ]}
+                    >
+                        ⭐
+                    </ThemedText>
+                ))}
+            </View>
+        );
+    };
+
+    const formatDate = (dateString: string) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    };
+
     return (
         <Modal visible={visible} animationType="slide" transparent>
             <ThemedView style={styles.overlay}>
@@ -148,7 +203,23 @@ export default function StoreDetails({ visible, store, onClose, onUpdateStore, o
                                     </ThemedText>
                                     <ThemedText style={styles.storePrice}>{store.price}</ThemedText>
                                 </View>
+                                <TouchableOpacity style={styles.editStoreButton} onPress={handleEditStore}>
+                                    <ThemedText style={styles.editStoreText}>✏️ Edit</ThemedText>
+                                </TouchableOpacity>
                             </View>
+
+                            {/* Rating Summary */}
+                            {storeReviews.length > 0 && (
+                                <View style={styles.ratingSummary}>
+                                    <View style={styles.ratingRow}>
+                                        {renderStars(Math.round(getAverageRating()))}
+                                        <ThemedText style={styles.averageRating}>
+                                            {getAverageRatingText()} ({storeReviews.length} review{storeReviews.length !== 1 ? 's' : ''})
+                                        </ThemedText>
+                                    </View>
+                                </View>
+                            )}
+
                             <ThemedText style={styles.storeDescription}>{store.description}</ThemedText>
                             <ThemedText style={styles.sellerName}>Seller: {store.sellerName}</ThemedText>
                             <ThemedText style={styles.storeLocation}>
@@ -220,6 +291,39 @@ export default function StoreDetails({ visible, store, onClose, onUpdateStore, o
                                         </View>
                                     </TouchableOpacity>
                                 ))
+                            )}
+                        </ThemedView>
+
+                        {/* Reviews Section */}
+                        <ThemedView style={styles.reviewsSection}>
+                            <ThemedText type="subtitle" style={styles.reviewsTitle}>
+                                Customer Reviews ({storeReviews.length})
+                            </ThemedText>
+
+                            {storeReviews.length === 0 ? (
+                                <ThemedView style={styles.emptyReviews}>
+                                    <ThemedText style={styles.emptyIcon}>💬</ThemedText>
+                                    <ThemedText style={styles.emptyText}>No reviews yet</ThemedText>
+                                    <ThemedText style={styles.emptySubtext}>Customers will be able to leave reviews for your store</ThemedText>
+                                </ThemedView>
+                            ) : (
+                                storeReviews
+                                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                    .map((review) => (
+                                        <View key={review.id} style={styles.reviewItem}>
+                                            <View style={styles.reviewHeader}>
+                                                <ThemedText style={styles.reviewerName}>{review.buyerName}</ThemedText>
+                                                <ThemedText style={styles.reviewDate}>{formatDate(review.date)}</ThemedText>
+                                            </View>
+                                            <View style={styles.reviewRating}>
+                                                {renderStars(review.rating)}
+                                                <ThemedText style={styles.ratingText}>
+                                                    {review.rating} star{review.rating !== 1 ? 's' : ''}
+                                                </ThemedText>
+                                            </View>
+                                            <ThemedText style={styles.reviewComment}>{review.comment}</ThemedText>
+                                        </View>
+                                    ))
                             )}
                         </ThemedView>
                     </ScrollView>
@@ -321,6 +425,46 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#007AFF',
     },
+    editStoreButton: {
+        backgroundColor: '#007AFF',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    editStoreText: {
+        color: 'white',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    ratingSummary: {
+        marginBottom: 16,
+        padding: 12,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 8,
+    },
+    ratingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    starsContainer: {
+        flexDirection: 'row',
+        marginRight: 8,
+    },
+    star: {
+        fontSize: 16,
+    },
+    starFilled: {
+        opacity: 1,
+    },
+    starEmpty: {
+        opacity: 0.3,
+    },
+    averageRating: {
+        fontSize: 14,
+        color: '#666',
+        fontWeight: '600',
+    },
     storeDescription: {
         fontSize: 14,
         color: '#444',
@@ -339,6 +483,8 @@ const styles = StyleSheet.create({
     },
     productsSection: {
         padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
     },
     productsHeader: {
         flexDirection: 'row',
@@ -461,5 +607,52 @@ const styles = StyleSheet.create({
     },
     actionButtonText: {
         fontSize: 12,
+    },
+    reviewsSection: {
+        padding: 20,
+    },
+    reviewsTitle: {
+        marginBottom: 16,
+        color: '#333',
+    },
+    emptyReviews: {
+        alignItems: 'center',
+        padding: 40,
+    },
+    reviewItem: {
+        backgroundColor: '#f8f9fa',
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 12,
+    },
+    reviewHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    reviewerName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+    },
+    reviewDate: {
+        fontSize: 12,
+        color: '#888',
+    },
+    reviewRating: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    ratingText: {
+        fontSize: 12,
+        color: '#666',
+        marginLeft: 8,
+    },
+    reviewComment: {
+        fontSize: 14,
+        color: '#444',
+        lineHeight: 20,
     },
 }); 
