@@ -17,7 +17,7 @@ interface Store {
 interface StoreFormProps {
     visible: boolean;
     onClose: () => void;
-    onSave: (store: Omit<Store, 'id'>) => void;
+    onSave: (store: Omit<Store, 'id' | 'products'>) => void;
     latitude: number;
     longitude: number;
 }
@@ -35,7 +35,7 @@ export default function StoreForm({ visible, onClose, onSave, latitude, longitud
             return;
         }
 
-        const store: Omit<Store, 'id'> = {
+        const store: Omit<Store, 'id' | 'products'> = {
             latitude,
             longitude,
             name: storeName,

@@ -1,5 +1,5 @@
-import BuyerMap from '../buyer/BuyerMap';
+import BuyerPage from '../buyer';
 
 export default function BuyerScreen() {
-  return <BuyerMap />;
+  return <BuyerPage />;
 }

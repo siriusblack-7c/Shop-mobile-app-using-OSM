@@ -1,5 +1,5 @@
-import SellerMap from '../seller/SellerMap';
+import SellerPage from '../seller';
 
 export default function SellerScreen() {
-  return <SellerMap />;
+  return <SellerPage />;
 }

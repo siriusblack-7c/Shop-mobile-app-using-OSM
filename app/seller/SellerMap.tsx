@@ -1,9 +1,11 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import React, { useState } from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, StyleSheet, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { Product } from './ProductForm';
 import StoreForm from './StoreForm';
+import StoreList from './StoreList';
 
 interface Store {
     id: string;
@@ -14,27 +16,36 @@ interface Store {
     price: string;
     description: string;
     sellerName: string;
+    products: Product[];
 }
 
 export default function SellerMap() {
     const [stores, setStores] = useState<Store[]>([]);
-    const [showForm, setShowForm] = useState(false);
+    const [showStoreForm, setShowStoreForm] = useState(false);
     const [selectedCoordinate, setSelectedCoordinate] = useState<{ latitude: number, longitude: number } | null>(null);
+    const [viewMode, setViewMode] = useState<'map' | 'stores'>('map');
 
     const handleMapPress = (event: any) => {
         const { latitude, longitude } = event.nativeEvent.coordinate;
         setSelectedCoordinate({ latitude, longitude });
-        setShowForm(true);
+        setShowStoreForm(true);
     };
 
-    const handleSaveStore = (storeData: Omit<Store, 'id'>) => {
+    const handleSaveStore = (storeData: Omit<Store, 'id' | 'products'>) => {
         const newStore: Store = {
             ...storeData,
             id: Date.now().toString(),
+            products: [],
         };
 
         setStores([...stores, newStore]);
         Alert.alert('Success!', 'Store added successfully');
+    };
+
+    const handleUpdateStore = (updatedStore: Store) => {
+        setStores(stores.map(store =>
+            store.id === updatedStore.id ? updatedStore : store
+        ));
     };
 
     const getMarkerIcon = (type: 'beef' | 'fish') => {
@@ -44,60 +55,118 @@ export default function SellerMap() {
     const handleMarkerPress = (store: Store) => {
         Alert.alert(
             store.name,
-            `Seller: ${store.sellerName}\nType: ${store.type === 'beef' ? 'Beef Store 🐄' : 'Fish Store 🐟'}\nPrice: ${store.price}\nDescription: ${store.description}`,
+            `Seller: ${store.sellerName}\nType: ${store.type === 'beef' ? 'Beef Store 🐄' : 'Fish Store 🐟'}\nPrice: ${store.price}\nProducts: ${store.products.length}\nDescription: ${store.description}`,
             [
                 { text: 'OK' },
                 {
                     text: 'Delete',
                     style: 'destructive',
-                    onPress: () => {
-                        setStores(stores.filter(s => s.id !== store.id));
-                        Alert.alert('Deleted', 'Store removed successfully');
-                    }
+                    onPress: () => deleteStore(store.id)
                 }
             ]
         );
+    };
+
+    const deleteStore = (storeId: string) => {
+        setStores(stores.filter(s => s.id !== storeId));
+        Alert.alert('Deleted', 'Store removed successfully');
+    };
+
+    const renderMapView = () => (
+        <MapView
+            style={styles.map}
+            provider={PROVIDER_DEFAULT}
+            initialRegion={{
+                latitude: 37.78825,
+                longitude: -122.4324,
+                latitudeDelta: 0.0922,
+                longitudeDelta: 0.0421,
+            }}
+            mapType="standard"
+            onPress={handleMapPress}
+        >
+            {stores.map((store) => (
+                <Marker
+                    key={store.id}
+                    coordinate={{
+                        latitude: store.latitude,
+                        longitude: store.longitude,
+                    }}
+                    title={store.name}
+                    description={`${store.type} store - ${store.products.length} products`}
+                    onPress={() => handleMarkerPress(store)}
+                >
+                    <ThemedText style={styles.markerEmoji}>{getMarkerIcon(store.type)}</ThemedText>
+                </Marker>
+            ))}
+        </MapView>
+    );
+
+    const getViewModeText = () => {
+        switch (viewMode) {
+            case 'map': return 'Tap on map to add your store';
+            case 'stores': return 'Your stores and products';
+            default: return '';
+        }
+    };
+
+    const getTotalProducts = () => {
+        return stores.reduce((total, store) => total + store.products.length, 0);
+    };
+
+    const renderCurrentView = () => {
+        switch (viewMode) {
+            case 'map':
+                return renderMapView();
+            case 'stores':
+                return (
+                    <StoreList
+                        stores={stores}
+                        onDeleteStore={deleteStore}
+                        onUpdateStore={handleUpdateStore}
+                    />
+                );
+            default:
+                return renderMapView();
+        }
     };
 
     return (
         <ThemedView style={styles.container}>
             <ThemedView style={styles.header}>
                 <ThemedText type="title">Seller Dashboard</ThemedText>
-                <ThemedText>Tap on map to add your store</ThemedText>
-                <ThemedText style={styles.storeCount}>Your Stores: {stores.length}</ThemedText>
+                <ThemedText>{getViewModeText()}</ThemedText>
+                <View style={styles.headerBottom}>
+                    <ThemedView style={styles.countsContainer}>
+                        <ThemedText style={styles.countText}>Stores: {stores.length}</ThemedText>
+                        <ThemedText style={styles.countText}>Products: {getTotalProducts()}</ThemedText>
+                    </ThemedView>
+                    <View style={styles.toggleContainer}>
+                        <TouchableOpacity
+                            style={[styles.toggleButton, viewMode === 'map' && styles.activeToggle]}
+                            onPress={() => setViewMode('map')}
+                        >
+                            <ThemedText style={[styles.toggleText, viewMode === 'map' && styles.activeToggleText]}>
+                                🗺️ Map
+                            </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.toggleButton, viewMode === 'stores' && styles.activeToggle]}
+                            onPress={() => setViewMode('stores')}
+                        >
+                            <ThemedText style={[styles.toggleText, viewMode === 'stores' && styles.activeToggleText]}>
+                                🏪 Stores & Products
+                            </ThemedText>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </ThemedView>
 
-            <MapView
-                style={styles.map}
-                provider={PROVIDER_DEFAULT}
-                initialRegion={{
-                    latitude: 37.78825,
-                    longitude: -122.4324,
-                    latitudeDelta: 0.0922,
-                    longitudeDelta: 0.0421,
-                }}
-                mapType="standard"
-                onPress={handleMapPress}
-            >
-                {stores.map((store) => (
-                    <Marker
-                        key={store.id}
-                        coordinate={{
-                            latitude: store.latitude,
-                            longitude: store.longitude,
-                        }}
-                        title={store.name}
-                        description={`${store.type} store - ${store.price}`}
-                        onPress={() => handleMarkerPress(store)}
-                    >
-                        <ThemedText style={styles.markerEmoji}>{getMarkerIcon(store.type)}</ThemedText>
-                    </Marker>
-                ))}
-            </MapView>
+            {renderCurrentView()}
 
             <StoreForm
-                visible={showForm}
-                onClose={() => setShowForm(false)}
+                visible={showStoreForm}
+                onClose={() => setShowStoreForm(false)}
                 onSave={handleSaveStore}
                 latitude={selectedCoordinate?.latitude || 0}
                 longitude={selectedCoordinate?.longitude || 0}
@@ -116,11 +185,44 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#ddd',
     },
-    storeCount: {
-        fontSize: 14,
+    headerBottom: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    countsContainer: {
+        flexDirection: 'column',
+    },
+    countText: {
+        fontSize: 12,
         color: '#666',
-        marginTop: 4,
         fontWeight: '600',
+    },
+    toggleContainer: {
+        flexDirection: 'row',
+        backgroundColor: '#ddd',
+        borderRadius: 8,
+        padding: 2,
+    },
+    toggleButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 6,
+        minWidth: 80,
+        alignItems: 'center',
+    },
+    activeToggle: {
+        backgroundColor: '#007AFF',
+    },
+    toggleText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#666',
+        textAlign: 'center',
+    },
+    activeToggleText: {
+        color: '#fff',
     },
     map: {
         flex: 1,
