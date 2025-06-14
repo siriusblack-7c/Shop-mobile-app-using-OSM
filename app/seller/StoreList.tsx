@@ -2,38 +2,18 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Product } from './ProductForm';
+import { Review, Store } from '../shared/dataStore';
 import StoreDetails from './StoreDetails';
-
-interface Review {
-    id: string;
-    storeId: string;
-    buyerName: string;
-    rating: number;
-    comment: string;
-    date: string;
-}
-
-interface Store {
-    id: string;
-    latitude: number;
-    longitude: number;
-    name: string;
-    type: 'beef' | 'fish';
-    price: string;
-    description: string;
-    sellerName: string;
-    products: Product[];
-}
 
 interface StoreListProps {
     stores: Store[];
     onDeleteStore: (storeId: string) => void;
     onUpdateStore: (updatedStore: Store) => void;
+    onEditStore?: (store: Store) => void;
     reviews?: Review[];
 }
 
-export default function StoreList({ stores, onDeleteStore, onUpdateStore, reviews = [] }: StoreListProps) {
+export default function StoreList({ stores, onDeleteStore, onUpdateStore, onEditStore, reviews = [] }: StoreListProps) {
     const [selectedStore, setSelectedStore] = useState<Store | null>(null);
     const [showStoreDetails, setShowStoreDetails] = useState(false);
 
@@ -57,10 +37,17 @@ export default function StoreList({ stores, onDeleteStore, onUpdateStore, review
         setSelectedStore(null);
     };
 
-    const handleEditStore = (store: Store) => {
-        // This function would typically trigger editing mode
-        // For now, we'll just show an alert since editing is handled differently in the parent
-        Alert.alert('Edit Store', 'Store editing is available from the map view');
+    const handleEditStoreFromList = (store: Store) => {
+        if (onEditStore) {
+            onEditStore(store);
+        } else {
+            Alert.alert('Edit Store', 'Store editing is not available in this view');
+        }
+    };
+
+    const handleEditStoreFromDetails = (store: Store) => {
+        setShowStoreDetails(false); // Close details modal first
+        handleEditStoreFromList(store);
     };
 
     const getStoreReviewCount = (storeId: string) => {
@@ -121,26 +108,39 @@ export default function StoreList({ stores, onDeleteStore, onUpdateStore, review
                                 {/* Quick actions */}
                                 <View style={styles.quickActions}>
                                     <ThemedText style={styles.tapHint}>Tap to manage products & view reviews</ThemedText>
-                                    <TouchableOpacity
-                                        style={styles.deleteButton}
-                                        onPress={(e) => {
-                                            e.stopPropagation();
-                                            Alert.alert(
-                                                'Delete Store',
-                                                `Are you sure you want to delete "${store.name}" and all its products?`,
-                                                [
-                                                    { text: 'Cancel', style: 'cancel' },
-                                                    {
-                                                        text: 'Delete',
-                                                        style: 'destructive',
-                                                        onPress: () => onDeleteStore(store.id)
-                                                    }
-                                                ]
-                                            );
-                                        }}
-                                    >
-                                        <ThemedText style={styles.deleteButtonText}>🗑️</ThemedText>
-                                    </TouchableOpacity>
+                                    <View style={styles.actionButtons}>
+                                        {onEditStore && (
+                                            <TouchableOpacity
+                                                style={styles.editButton}
+                                                onPress={(e) => {
+                                                    e.stopPropagation();
+                                                    handleEditStoreFromList(store);
+                                                }}
+                                            >
+                                                <ThemedText style={styles.editButtonText}>✏️</ThemedText>
+                                            </TouchableOpacity>
+                                        )}
+                                        <TouchableOpacity
+                                            style={styles.deleteButton}
+                                            onPress={(e) => {
+                                                e.stopPropagation();
+                                                Alert.alert(
+                                                    'Delete Store',
+                                                    `Are you sure you want to delete "${store.name}" and all its products?`,
+                                                    [
+                                                        { text: 'Cancel', style: 'cancel' },
+                                                        {
+                                                            text: 'Delete',
+                                                            style: 'destructive',
+                                                            onPress: () => onDeleteStore(store.id)
+                                                        }
+                                                    ]
+                                                );
+                                            }}
+                                        >
+                                            <ThemedText style={styles.deleteButtonText}>🗑️</ThemedText>
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
                             </TouchableOpacity>
                         );
@@ -157,7 +157,7 @@ export default function StoreList({ stores, onDeleteStore, onUpdateStore, review
                 }}
                 onUpdateStore={handleStoreUpdate}
                 onDeleteStore={handleDeleteStore}
-                onEditStore={handleEditStore}
+                onEditStore={handleEditStoreFromDetails}
                 reviews={reviews}
             />
         </ThemedView>
@@ -280,5 +280,22 @@ const styles = StyleSheet.create({
     },
     deleteButtonText: {
         fontSize: 14,
+    },
+    editButton: {
+        backgroundColor: '#007AFF',
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    editButtonText: {
+        fontSize: 14,
+        color: '#fff',
+    },
+    actionButtons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
 }); 

@@ -1,25 +1,17 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import React, { useState } from 'react';
-import { Alert, Linking, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Review } from '../shared/dataStore';
+import { Image, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Review, Store } from '../shared/dataStore';
 import ReviewForm from './ReviewForm';
 
-interface Store {
-    id: string;
-    latitude: number;
-    longitude: number;
-    name: string;
-    type: 'beef' | 'fish';
-    price: string;
-    description: string;
-    sellerName: string;
+interface StoreWithDistance extends Store {
     distance?: number;
 }
 
 interface StoreDetailsProps {
     visible: boolean;
-    store: Store | null;
+    store: StoreWithDistance | null;
     onClose: () => void;
     reviews: Review[];
     onAddReview: (review: Omit<Review, 'id' | 'date'>) => void;
@@ -32,18 +24,6 @@ export default function StoreDetails({ visible, store, onClose, reviews, onAddRe
 
     const getStoreIcon = (type: 'beef' | 'fish') => {
         return type === 'beef' ? '🐄' : '🐟';
-    };
-
-    const handleContact = () => {
-        Alert.alert(
-            'Contact Seller',
-            `Would you like to contact ${store.sellerName}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Call', onPress: () => Linking.openURL('tel:+1234567890') },
-                { text: 'Message', onPress: () => Alert.alert('Message', 'Messaging feature coming soon!') }
-            ]
-        );
     };
 
     const handleLeaveReview = () => {
@@ -140,15 +120,46 @@ export default function StoreDetails({ visible, store, onClose, reviews, onAddRe
                                 <ThemedText style={styles.distance}>📍 {store.distance}km away</ThemedText>
                             )}
 
-                            {/* Action Buttons */}
+                            {/* Action Button */}
                             <View style={styles.actionButtons}>
-                                <TouchableOpacity style={styles.contactButton} onPress={handleContact}>
-                                    <ThemedText style={styles.contactButtonText}>📞 Contact Seller</ThemedText>
-                                </TouchableOpacity>
                                 <TouchableOpacity style={styles.leaveReviewButton} onPress={handleLeaveReview}>
                                     <ThemedText style={styles.leaveReviewButtonText}>📝 Leave Review</ThemedText>
                                 </TouchableOpacity>
                             </View>
+                        </ThemedView>
+
+                        {/* Products Section */}
+                        <ThemedView style={styles.productsSection}>
+                            <ThemedText type="subtitle" style={styles.productsTitle}>
+                                Available Products ({store.products.length})
+                            </ThemedText>
+
+                            {store.products.length === 0 ? (
+                                <ThemedView style={styles.emptyProducts}>
+                                    <ThemedText style={styles.emptyIcon}>📦</ThemedText>
+                                    <ThemedText style={styles.emptyText}>No products available</ThemedText>
+                                    <ThemedText style={styles.emptySubtext}>This store hasn't added any products yet</ThemedText>
+                                </ThemedView>
+                            ) : (
+                                <View style={styles.productsList}>
+                                    {store.products.map((product) => (
+                                        <View key={product.id} style={styles.productItem}>
+                                            <View style={styles.productContent}>
+                                                {product.picture && (
+                                                    <Image source={{ uri: product.picture }} style={styles.productImage} />
+                                                )}
+                                                <View style={styles.productInfo}>
+                                                    <ThemedText style={styles.productName}>{product.name}</ThemedText>
+                                                    <ThemedText style={styles.productPrice}>{product.price}</ThemedText>
+                                                    <ThemedText style={styles.productDescription} numberOfLines={2}>
+                                                        {product.description}
+                                                    </ThemedText>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
                         </ThemedView>
 
                         {/* Reviews Section */}
@@ -329,18 +340,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 12,
     },
-    contactButton: {
-        flex: 1,
-        backgroundColor: '#34C759',
-        paddingVertical: 12,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    contactButtonText: {
-        color: 'white',
-        fontSize: 14,
-        fontWeight: '600',
-    },
     leaveReviewButton: {
         flex: 1,
         backgroundColor: '#007AFF',
@@ -353,14 +352,14 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
     },
-    reviewsSection: {
+    productsSection: {
         padding: 20,
     },
-    reviewsTitle: {
+    productsTitle: {
         marginBottom: 16,
         color: '#333',
     },
-    emptyReviews: {
+    emptyProducts: {
         alignItems: 'center',
         padding: 40,
     },
@@ -378,6 +377,62 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#999',
         textAlign: 'center',
+    },
+    productsList: {
+        gap: 12,
+    },
+    productItem: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    productContent: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    productImage: {
+        width: 60,
+        height: 60,
+        borderRadius: 8,
+        marginRight: 12,
+        backgroundColor: '#e0e0e0',
+    },
+    productInfo: {
+        flex: 1,
+    },
+    productName: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 4,
+        color: '#333',
+    },
+    productPrice: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#007AFF',
+        marginBottom: 4,
+    },
+    productDescription: {
+        fontSize: 12,
+        color: '#666',
+        lineHeight: 16,
+    },
+    reviewsSection: {
+        padding: 20,
+    },
+    reviewsTitle: {
+        marginBottom: 16,
+        color: '#333',
+    },
+    emptyReviews: {
+        alignItems: 'center',
+        padding: 40,
     },
     reviewItem: {
         backgroundColor: '#f8f9fa',

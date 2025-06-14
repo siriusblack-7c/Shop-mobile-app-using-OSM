@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 export interface Review {
     id: string;
     storeId: string;
@@ -7,45 +9,221 @@ export interface Review {
     date: string;
 }
 
-// Simple in-memory data store for reviews
+export interface Product {
+    id: string;
+    name: string;
+    price: string;
+    description: string;
+    picture?: string; // URI to the image
+}
+
+export interface Store {
+    id: string;
+    latitude: number;
+    longitude: number;
+    name: string;
+    type: 'beef' | 'fish';
+    price: string;
+    description: string;
+    sellerName: string;
+    products: Product[];
+}
+
+// Enhanced data store with AsyncStorage persistence for stores and reviews
 class DataStore {
     private reviews: Review[] = [];
+    private stores: Store[] = [];
     private listeners: (() => void)[] = [];
+    private isInitialized = false;
 
-    // Initialize with some sample data
     constructor() {
-        this.reviews = [
-            {
-                id: '1',
-                storeId: 'sample-store-1',
-                buyerName: 'Alice Johnson',
-                rating: 5,
-                comment: 'Excellent quality beef! Very fresh and the seller was very helpful.',
-                date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-            },
-            {
-                id: '2',
-                storeId: 'sample-store-1',
-                buyerName: 'Bob Smith',
-                rating: 4,
-                comment: 'Good quality meat, reasonable prices. Will come back again.',
-                date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-            },
-        ];
+        this.initializeAsync();
     }
 
-    // Get all reviews
+    // Initialize data asynchronously
+    private async initializeAsync(): Promise<void> {
+        if (this.isInitialized) return;
+
+        await this.loadFromStorage();
+        this.initializeSampleData();
+        this.isInitialized = true;
+        this.notifyListeners();
+    }
+
+    // Ensure initialization before operations
+    private async ensureInitialized(): Promise<void> {
+        if (!this.isInitialized) {
+            await this.initializeAsync();
+        }
+    }
+
+    // Load data from AsyncStorage
+    private async loadFromStorage(): Promise<void> {
+        try {
+            const storedReviews = await AsyncStorage.getItem('maptest_reviews');
+            const storedStores = await AsyncStorage.getItem('maptest_stores');
+
+            if (storedReviews) {
+                this.reviews = JSON.parse(storedReviews);
+            }
+
+            if (storedStores) {
+                this.stores = JSON.parse(storedStores);
+            }
+        } catch (error) {
+            console.warn('Failed to load data from AsyncStorage:', error);
+        }
+    }
+
+    // Save data to AsyncStorage
+    private async saveToStorage(): Promise<void> {
+        try {
+            await AsyncStorage.setItem('maptest_reviews', JSON.stringify(this.reviews));
+            await AsyncStorage.setItem('maptest_stores', JSON.stringify(this.stores));
+        } catch (error) {
+            console.warn('Failed to save data to AsyncStorage:', error);
+        }
+    }
+
+    // Initialize with sample data if no data exists
+    private initializeSampleData(): void {
+        if (this.reviews.length === 0) {
+            this.reviews = [
+                {
+                    id: '1',
+                    storeId: 'sample-store-1',
+                    buyerName: 'Alice Johnson',
+                    rating: 5,
+                    comment: 'Excellent quality beef! Very fresh and the seller was very helpful.',
+                    date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+                },
+                {
+                    id: '2',
+                    storeId: 'sample-store-1',
+                    buyerName: 'Bob Smith',
+                    rating: 4,
+                    comment: 'Good quality meat, reasonable prices. Will come back again.',
+                    date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+                },
+            ];
+        }
+
+        if (this.stores.length === 0) {
+            this.stores = [
+                {
+                    id: 'sample-store-1',
+                    latitude: 37.78625,
+                    longitude: -122.4344,
+                    name: 'Fresh Beef Market',
+                    type: 'beef',
+                    price: '$15-25',
+                    description: 'Premium quality beef, fresh daily delivery',
+                    sellerName: 'John Smith',
+                    products: [],
+                },
+                {
+                    id: 'sample-store-2',
+                    latitude: 37.79025,
+                    longitude: -122.4304,
+                    name: 'Ocean Fresh Fish',
+                    type: 'fish',
+                    price: '$12-20',
+                    description: 'Freshly caught fish from local waters',
+                    sellerName: 'Maria Garcia',
+                    products: [],
+                },
+                {
+                    id: 'sample-store-3',
+                    latitude: 37.78425,
+                    longitude: -122.4384,
+                    name: 'Prime Cuts',
+                    type: 'beef',
+                    price: '$20-30',
+                    description: 'Organic grass-fed beef',
+                    sellerName: 'David Wilson',
+                    products: [],
+                },
+                {
+                    id: 'sample-store-4',
+                    latitude: 37.79225,
+                    longitude: -122.4284,
+                    name: 'Seafood Paradise',
+                    type: 'fish',
+                    price: '$8-18',
+                    description: 'Wide variety of fresh seafood',
+                    sellerName: 'Lisa Chen',
+                    products: [],
+                },
+            ];
+            // Save initial data
+            this.saveToStorage();
+        }
+    }
+
+    // Store management methods
+    getStores(): Store[] {
+        return [...this.stores];
+    }
+
+    async addStore(storeData: Omit<Store, 'id' | 'products'>): Promise<Store> {
+        await this.ensureInitialized();
+
+        const newStore: Store = {
+            ...storeData,
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            products: [],
+        };
+
+        this.stores.push(newStore);
+        await this.saveToStorage();
+        this.notifyListeners();
+        return newStore;
+    }
+
+    async updateStore(storeId: string, storeData: Partial<Store>): Promise<Store | null> {
+        await this.ensureInitialized();
+
+        const index = this.stores.findIndex(store => store.id === storeId);
+        if (index === -1) return null;
+
+        this.stores[index] = { ...this.stores[index], ...storeData };
+        await this.saveToStorage();
+        this.notifyListeners();
+        return this.stores[index];
+    }
+
+    async deleteStore(storeId: string): Promise<boolean> {
+        await this.ensureInitialized();
+
+        const initialLength = this.stores.length;
+        this.stores = this.stores.filter(store => store.id !== storeId);
+
+        if (this.stores.length < initialLength) {
+            // Also remove reviews for this store
+            this.reviews = this.reviews.filter(review => review.storeId !== storeId);
+            await this.saveToStorage();
+            this.notifyListeners();
+            return true;
+        }
+        return false;
+    }
+
+    getStore(storeId: string): Store | null {
+        return this.stores.find(store => store.id === storeId) || null;
+    }
+
+    // Review management methods
     getReviews(): Review[] {
         return [...this.reviews];
     }
 
-    // Get reviews for a specific store
     getStoreReviews(storeId: string): Review[] {
         return this.reviews.filter(review => review.storeId === storeId);
     }
 
-    // Add a new review
-    addReview(reviewData: Omit<Review, 'id' | 'date'>): Review {
+    async addReview(reviewData: Omit<Review, 'id' | 'date'>): Promise<Review> {
+        await this.ensureInitialized();
+
         const newReview: Review = {
             ...reviewData,
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -53,6 +231,7 @@ class DataStore {
         };
 
         this.reviews.push(newReview);
+        await this.saveToStorage();
         this.notifyListeners();
         return newReview;
     }
@@ -87,6 +266,19 @@ class DataStore {
     // Get review count for a store
     getStoreReviewCount(storeId: string): number {
         return this.getStoreReviews(storeId).length;
+    }
+
+    // Clear all data (for testing purposes)
+    async clearAllData(): Promise<void> {
+        this.stores = [];
+        this.reviews = [];
+        await this.saveToStorage();
+        this.notifyListeners();
+    }
+
+    // Get initialization status
+    getInitializationStatus(): boolean {
+        return this.isInitialized;
     }
 }
 

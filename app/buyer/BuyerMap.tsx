@@ -3,86 +3,44 @@ import { ThemedView } from '@/components/ThemedView';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, TouchableOpacity } from 'react-native';
 import MapView, { Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
-import { dataStore, Review } from '../shared/dataStore';
+import { dataStore, Review, Store } from '../shared/dataStore';
 import StoreDetails from './StoreDetails';
 
-interface Store {
-    id: string;
-    latitude: number;
-    longitude: number;
-    name: string;
-    type: 'beef' | 'fish';
-    price: string;
-    description: string;
-    sellerName: string;
+interface StoreWithDistance extends Store {
     distance?: number; // Distance from buyer location
 }
 
 export default function BuyerMap() {
     const [buyerLocation, setBuyerLocation] = useState<{ latitude: number, longitude: number } | null>(null);
-    const [nearbyStores, setNearbyStores] = useState<Store[]>([]);
+    const [allStores, setAllStores] = useState<Store[]>([]);
+    const [nearbyStores, setNearbyStores] = useState<StoreWithDistance[]>([]);
     const [selectedStore, setSelectedStore] = useState<Store | null>(null);
     const [showStoreDetails, setShowStoreDetails] = useState(false);
     const [reviews, setReviews] = useState<Review[]>([]);
+    const [lastClickedStore, setLastClickedStore] = useState<string | null>(null);
+    const [clickTimeout, setClickTimeout] = useState<NodeJS.Timeout | null>(null);
 
-    // Subscribe to review changes
+    // Subscribe to data changes
     useEffect(() => {
-        const updateReviews = () => {
+        const updateData = () => {
+            const stores = dataStore.getStores();
+            setAllStores(stores);
             setReviews(dataStore.getReviews());
+
+            // Recalculate nearby stores if buyer location is set
+            if (buyerLocation) {
+                updateNearbyStores(buyerLocation, stores);
+            }
         };
 
         // Initial load
-        updateReviews();
+        updateData();
 
         // Subscribe to changes
-        const unsubscribe = dataStore.subscribe(updateReviews);
+        const unsubscribe = dataStore.subscribe(updateData);
 
         return unsubscribe;
-    }, []);
-
-    // Mock stores data (in real app, this would come from backend)
-    const allStores: Store[] = [
-        {
-            id: 'sample-store-1',
-            latitude: 37.78625,
-            longitude: -122.4344,
-            name: 'Fresh Beef Market',
-            type: 'beef',
-            price: '$15-25',
-            description: 'Premium quality beef, fresh daily delivery',
-            sellerName: 'John Smith',
-        },
-        {
-            id: 'sample-store-2',
-            latitude: 37.79025,
-            longitude: -122.4304,
-            name: 'Ocean Fresh Fish',
-            type: 'fish',
-            price: '$12-20',
-            description: 'Freshly caught fish from local waters',
-            sellerName: 'Maria Garcia',
-        },
-        {
-            id: 'sample-store-3',
-            latitude: 37.78425,
-            longitude: -122.4384,
-            name: 'Prime Cuts',
-            type: 'beef',
-            price: '$20-30',
-            description: 'Organic grass-fed beef',
-            sellerName: 'David Wilson',
-        },
-        {
-            id: 'sample-store-4',
-            latitude: 37.79225,
-            longitude: -122.4284,
-            name: 'Seafood Paradise',
-            type: 'fish',
-            price: '$8-18',
-            description: 'Wide variety of fresh seafood',
-            sellerName: 'Lisa Chen',
-        },
-    ];
+    }, [buyerLocation]);
 
     // Calculate distance between two coordinates (in km)
     const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -97,24 +55,43 @@ export default function BuyerMap() {
         return Math.round(distance * 100) / 100; // Round to 2 decimal places
     };
 
-    const handleMapPress = (event: any) => {
-        const { latitude, longitude } = event.nativeEvent.coordinate;
-        setBuyerLocation({ latitude, longitude });
-
+    const updateNearbyStores = (location: { latitude: number, longitude: number }, stores: Store[]) => {
         // Find stores within 5km
-        const storesWithDistance = allStores.map(store => ({
+        const storesWithDistance = stores.map(store => ({
             ...store,
-            distance: calculateDistance(latitude, longitude, store.latitude, store.longitude)
+            distance: calculateDistance(location.latitude, location.longitude, store.latitude, store.longitude)
         }));
 
         const nearby = storesWithDistance.filter(store => store.distance! <= 5);
         setNearbyStores(nearby);
+    };
+
+    const handleMapPress = (event: any) => {
+        const { latitude, longitude } = event.nativeEvent.coordinate;
+        const location = { latitude, longitude };
+        setBuyerLocation(location);
+
+        // Find stores within 5km for the alert
+        const storesWithDistance = allStores.map(store => ({
+            ...store,
+            distance: calculateDistance(location.latitude, location.longitude, store.latitude, store.longitude)
+        }));
+        const nearby = storesWithDistance.filter(store => store.distance! <= 5);
+
+        updateNearbyStores(location, allStores);
 
         Alert.alert(
             'Location Set!',
             `Found ${nearby.length} stores within 5km of your location.`,
             [{ text: 'OK' }]
         );
+
+        // Clear any selected store when clicking on empty map
+        setLastClickedStore(null);
+        if (clickTimeout) {
+            clearTimeout(clickTimeout);
+            setClickTimeout(null);
+        }
     };
 
     const getMarkerIcon = (type: 'beef' | 'fish') => {
@@ -122,12 +99,32 @@ export default function BuyerMap() {
     };
 
     const handleStorePress = (store: Store) => {
-        setSelectedStore(store);
-        setShowStoreDetails(true);
+        // Clear any existing timeout
+        if (clickTimeout) {
+            clearTimeout(clickTimeout);
+            setClickTimeout(null);
+        }
+
+        // Check if this is the same store clicked within a short time (double click)
+        if (lastClickedStore === store.id) {
+            // Second click - open store details
+            setSelectedStore(store);
+            setShowStoreDetails(true);
+            setLastClickedStore(null);
+        } else {
+            // First click - just show the tooltip (marker's built-in callout)
+            setLastClickedStore(store.id);
+
+            // Set a timeout to reset the click state after 2 seconds
+            const timeout = setTimeout(() => {
+                setLastClickedStore(null);
+            }, 2000);
+            setClickTimeout(timeout);
+        }
     };
 
-    const handleAddReview = (reviewData: Omit<Review, 'id' | 'date'>) => {
-        dataStore.addReview(reviewData);
+    const handleAddReview = async (reviewData: Omit<Review, 'id' | 'date'>) => {
+        await dataStore.addReview(reviewData);
     };
 
     const clearLocation = () => {
@@ -148,7 +145,7 @@ export default function BuyerMap() {
         <ThemedView style={styles.container}>
             <ThemedView style={styles.header}>
                 <ThemedText type="title">Find Stores</ThemedText>
-                <ThemedText>Tap on map to set your location</ThemedText>
+                <ThemedText>Tap on map to set your location. Tap stores once for info, twice for details.</ThemedText>
                 {buyerLocation && (
                     <ThemedView style={styles.locationInfo}>
                         <ThemedText style={styles.storeCount}>
@@ -197,9 +194,12 @@ export default function BuyerMap() {
                 {nearbyStores.map((store) => {
                     const reviewCount = getStoreReviewCount(store.id);
                     const avgRating = getStoreAverageRating(store.id);
-                    const description = reviewCount > 0
-                        ? `${store.distance}km away - ${store.price} - ⭐${avgRating} (${reviewCount} reviews)`
-                        : `${store.distance}km away - ${store.price}`;
+                    const productCount = store.products.length;
+
+                    let description = `${store.distance}km away - ${productCount} products - ${store.price}`;
+                    if (reviewCount > 0) {
+                        description += ` - ⭐${avgRating} (${reviewCount} reviews)`;
+                    }
 
                     return (
                         <Marker

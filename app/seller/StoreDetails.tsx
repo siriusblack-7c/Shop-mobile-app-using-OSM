@@ -2,28 +2,8 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import React, { useState } from 'react';
 import { Alert, Image, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import ProductForm, { Product } from './ProductForm';
-
-interface Review {
-    id: string;
-    storeId: string;
-    buyerName: string;
-    rating: number;
-    comment: string;
-    date: string;
-}
-
-interface Store {
-    id: string;
-    latitude: number;
-    longitude: number;
-    name: string;
-    type: 'beef' | 'fish';
-    price: string;
-    description: string;
-    sellerName: string;
-    products: Product[];
-}
+import { Product, Review, Store } from '../shared/dataStore';
+import ProductForm from './ProductForm';
 
 interface StoreDetailsProps {
     visible: boolean;

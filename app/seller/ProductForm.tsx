@@ -3,14 +3,7 @@ import { ThemedView } from '@/components/ThemedView';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { Alert, Image, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
-
-export interface Product {
-    id: string;
-    name: string;
-    price: string;
-    description: string;
-    picture?: string; // URI to the image
-}
+import { Product } from '../shared/dataStore';
 
 interface ProductFormProps {
     visible: boolean;
@@ -66,7 +59,7 @@ export default function ProductForm({ visible, onClose, onSave, editProduct }: P
 
         // Launch image picker
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: [ImagePicker.MediaType.Images],
             allowsEditing: true,
             aspect: [4, 3],
             quality: 0.7,

@@ -3,23 +3,10 @@ import { ThemedView } from '@/components/ThemedView';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
-import { dataStore, Review } from '../shared/dataStore';
-import { Product } from './ProductForm';
+import { dataStore, Review, Store } from '../shared/dataStore';
 import StoreDetails from './StoreDetails';
 import StoreForm from './StoreForm';
 import StoreList from './StoreList';
-
-interface Store {
-    id: string;
-    latitude: number;
-    longitude: number;
-    name: string;
-    type: 'beef' | 'fish';
-    price: string;
-    description: string;
-    sellerName: string;
-    products: Product[];
-}
 
 export default function SellerMap() {
     const [stores, setStores] = useState<Store[]>([]);
@@ -30,18 +17,21 @@ export default function SellerMap() {
     const [selectedStore, setSelectedStore] = useState<Store | null>(null);
     const [editingStore, setEditingStore] = useState<Store | null>(null);
     const [viewMode, setViewMode] = useState<'map' | 'stores'>('map');
+    const [lastClickedStore, setLastClickedStore] = useState<string | null>(null);
+    const [clickTimeout, setClickTimeout] = useState<NodeJS.Timeout | null>(null);
 
-    // Subscribe to review changes
+    // Subscribe to data changes
     useEffect(() => {
-        const updateReviews = () => {
+        const updateData = () => {
+            setStores(dataStore.getStores());
             setReviews(dataStore.getReviews());
         };
 
         // Initial load
-        updateReviews();
+        updateData();
 
         // Subscribe to changes
-        const unsubscribe = dataStore.subscribe(updateReviews);
+        const unsubscribe = dataStore.subscribe(updateData);
 
         return unsubscribe;
     }, []);
@@ -51,38 +41,37 @@ export default function SellerMap() {
         setSelectedCoordinate({ latitude, longitude });
         setEditingStore(null); // Clear editing store for new store creation
         setShowStoreForm(true);
+        
+        // Clear any selected store when clicking on empty map
+        setLastClickedStore(null);
+        if (clickTimeout) {
+            clearTimeout(clickTimeout);
+            setClickTimeout(null);
+        }
     };
 
-    const handleSaveStore = (storeData: Omit<Store, 'id' | 'products'>) => {
+    const handleSaveStore = async (storeData: Omit<Store, 'id' | 'products'>) => {
         if (editingStore) {
             // Update existing store
-            const updatedStore: Store = {
-                ...editingStore,
-                ...storeData,
-                products: editingStore.products, // Keep existing products
-            };
-            setStores(stores.map(store =>
-                store.id === editingStore.id ? updatedStore : store
-            ));
-            Alert.alert('Success!', 'Store updated successfully');
-            setEditingStore(null);
+            const updatedStore = await dataStore.updateStore(editingStore.id, storeData);
+            if (updatedStore) {
+                Alert.alert('Success!', 'Store updated successfully');
+                setEditingStore(null);
+            } else {
+                Alert.alert('Error', 'Failed to update store');
+            }
         } else {
             // Create new store
-            const newStore: Store = {
-                ...storeData,
-                id: Date.now().toString(),
-                products: [],
-            };
-            setStores([...stores, newStore]);
+            const newStore = await dataStore.addStore(storeData);
             Alert.alert('Success!', 'Store added successfully');
         }
     };
 
-    const handleUpdateStore = (updatedStore: Store) => {
-        setStores(stores.map(store =>
-            store.id === updatedStore.id ? updatedStore : store
-        ));
-        setSelectedStore(updatedStore); // Update selected store to reflect changes
+    const handleUpdateStore = async (updatedStore: Store) => {
+        const result = await dataStore.updateStore(updatedStore.id, updatedStore);
+        if (result) {
+            setSelectedStore(result); // Update selected store to reflect changes
+        }
     };
 
     const getMarkerIcon = (type: 'beef' | 'fish') => {
@@ -90,8 +79,28 @@ export default function SellerMap() {
     };
 
     const handleMarkerPress = (store: Store) => {
-        setSelectedStore(store);
-        setShowStoreDetails(true);
+        // Clear any existing timeout
+        if (clickTimeout) {
+            clearTimeout(clickTimeout);
+            setClickTimeout(null);
+        }
+
+        // Check if this is the same store clicked within a short time (double click)
+        if (lastClickedStore === store.id) {
+            // Second click - open store details
+            setSelectedStore(store);
+            setShowStoreDetails(true);
+            setLastClickedStore(null);
+        } else {
+            // First click - just show the tooltip (marker's built-in callout)
+            setLastClickedStore(store.id);
+            
+            // Set a timeout to reset the click state after 2 seconds
+            const timeout = setTimeout(() => {
+                setLastClickedStore(null);
+            }, 2000);
+            setClickTimeout(timeout);
+        }
     };
 
     const handleEditStoreFromDetails = (store: Store) => {
@@ -101,9 +110,13 @@ export default function SellerMap() {
         setShowStoreForm(true);
     };
 
-    const deleteStore = (storeId: string) => {
-        setStores(stores.filter(s => s.id !== storeId));
-        Alert.alert('Deleted', 'Store removed successfully');
+    const deleteStore = async (storeId: string) => {
+        const success = await dataStore.deleteStore(storeId);
+        if (success) {
+            Alert.alert('Deleted', 'Store removed successfully');
+        } else {
+            Alert.alert('Error', 'Failed to delete store');
+        }
     };
 
     const getStoreReviewCount = (storeId: string) => {
@@ -154,7 +167,7 @@ export default function SellerMap() {
 
     const getViewModeText = () => {
         switch (viewMode) {
-            case 'map': return 'Tap on map to add store, tap markers to edit';
+            case 'map': return 'Tap on map to add store, tap markers once for info, twice for details';
             case 'stores': return 'Your stores and products';
             default: return '';
         }
@@ -180,6 +193,7 @@ export default function SellerMap() {
                         stores={stores}
                         onDeleteStore={deleteStore}
                         onUpdateStore={handleUpdateStore}
+                        onEditStore={handleEditStoreFromDetails}
                         reviews={reviews}
                     />
                 );
