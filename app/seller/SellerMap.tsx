@@ -41,7 +41,7 @@ export default function SellerMap() {
         setSelectedCoordinate({ latitude, longitude });
         setEditingStore(null); // Clear editing store for new store creation
         setShowStoreForm(true);
-        
+
         // Clear any selected store when clicking on empty map
         setLastClickedStore(null);
         if (clickTimeout) {
@@ -94,7 +94,7 @@ export default function SellerMap() {
         } else {
             // First click - just show the tooltip (marker's built-in callout)
             setLastClickedStore(store.id);
-            
+
             // Set a timeout to reset the click state after 2 seconds
             const timeout = setTimeout(() => {
                 setLastClickedStore(null);
@@ -157,6 +157,12 @@ export default function SellerMap() {
                         title={store.name}
                         description={description}
                         onPress={() => handleMarkerPress(store)}
+                        onCalloutPress={() => {
+                            // Clicking on the callout/tooltip opens store details directly
+                            setSelectedStore(store);
+                            setShowStoreDetails(true);
+                            setLastClickedStore(null);
+                        }}
                     >
                         <ThemedText style={styles.markerEmoji}>{getMarkerIcon(store.type)}</ThemedText>
                     </Marker>
@@ -167,7 +173,7 @@ export default function SellerMap() {
 
     const getViewModeText = () => {
         switch (viewMode) {
-            case 'map': return 'Tap on map to add store, tap markers once for info, twice for details';
+            case 'map': return 'Tap on map to add store, tap markers for info, tap info or marker again for details';
             case 'stores': return 'Your stores and products';
             default: return '';
         }

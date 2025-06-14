@@ -145,7 +145,7 @@ export default function BuyerMap() {
         <ThemedView style={styles.container}>
             <ThemedView style={styles.header}>
                 <ThemedText type="title">Find Stores</ThemedText>
-                <ThemedText>Tap on map to set your location. Tap stores once for info, twice for details.</ThemedText>
+                <ThemedText>Tap on map to set your location. Tap stores for info, tap info or store again for details.</ThemedText>
                 {buyerLocation && (
                     <ThemedView style={styles.locationInfo}>
                         <ThemedText style={styles.storeCount}>
@@ -211,6 +211,12 @@ export default function BuyerMap() {
                             title={store.name}
                             description={description}
                             onPress={() => handleStorePress(store)}
+                            onCalloutPress={() => {
+                                // Clicking on the callout/tooltip opens store details directly
+                                setSelectedStore(store);
+                                setShowStoreDetails(true);
+                                setLastClickedStore(null);
+                            }}
                         >
                             <ThemedText style={styles.markerEmoji}>{getMarkerIcon(store.type)}</ThemedText>
                         </Marker>
